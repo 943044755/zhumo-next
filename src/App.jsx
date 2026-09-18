@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from './components/Sidebar.jsx';
 import Topbar from './components/Topbar.jsx';
@@ -9,11 +11,13 @@ import Drawer from './components/Drawer.jsx';
 import TaskModal from './components/TaskModal.jsx';
 import ConfirmModal from './components/ConfirmModal.jsx';
 import { loadTasks, saveTasks, fetchRemoteTasks, pushRemoteTasks } from './lib/api.js';
-import { seedData, newId, normalize, log as addLog } from './lib/tasks.js';
+import { seedData, newId, normalize, log as addLog, fileBase } from './lib/tasks.js';
 import { TODAY } from './lib/date.js';
-import { CATS, STATUS } from './lib/constants.js';
+import { CATS, STATUS, LS_KEY } from './lib/constants.js';
 
-export default function App() {
+export default function App({ user = '' }) {
+  /* 本机缓存键按用户隔离：同一浏览器换账号登录，绝看不到别人的缓存 */
+  const lsKey = LS_KEY + ':' + (user || 'anon');
   /* Next.js 会在服务端预渲染本组件（无 localStorage，日期时区也可能与客户端不同）：
      首帧统一渲染空壳，挂载后再读本地快照/云端，避免水合不一致。 */
   const [tasks, setTasks] = useState(null);
@@ -56,29 +60,38 @@ export default function App() {
   const persist = (next) => {
     setTasks(next);
     tasksRef.current = next;
-    if (!saveTasks(next)) showToast('本地存储不可用，改动仅保留在当前页');
+    if (!saveTasks(lsKey, next)) showToast('本地存储不可用，改动仅保留在当前页');
     if (cloudReadyRef.current) syncUp(next);
     else dirtyRef.current = true;
   };
-  /* 挂载后加载数据：本地快照秒出（没有则用示例数据），再异步拉云端；
-     云端为空库、或拉取期间有过本地改动 → 把本地整表推上云；云端有数据 → 以云端为准 */
+  /* 挂载后加载数据：本机缓存（本人键）秒出，再异步拉云端。
+     云端是唯一事实源 —— 拉到后总是以云端为准覆盖本地（空账号就是空案头，
+     示例数据走 ⚙ 菜单手动恢复）。唯一例外：拉取期间有过本地改动（dirty）→
+     把本人本地整表推上云（最后写入胜出）。
+     注意：旧版「云端为空就把本地上云」在多用户下会把上一位用户留在浏览器里的
+     缓存灌进新注册的空账号，属于跨用户数据泄漏，已移除。 */
   useEffect(() => {
-    const local = loadTasks() || seedData();
+    if (!lsKey) return;
+    const local = loadTasks(lsKey) || [];
     tasksRef.current = local;
     setTasks(local);
-    saveTasks(local);
+    saveTasks(lsKey, local);
     let alive = true;
     (async () => {
       const remote = await fetchRemoteTasks();
       if (!alive) return;
       cloudReadyRef.current = true;
-      if (remote === null) return;                 // 后端不可达 → 本地模式
-      if (dirtyRef.current || remote.length === 0) {
-        syncUp(tasksRef.current);                  // 拉取期间有过改动 / 空库首连：本地上云
+      if (remote === null) {
+        showToast('云端暂不可达，当前显示本机缓存');
+        return;
+      }
+      if (dirtyRef.current) {
+        syncUp(tasksRef.current);
         return;
       }
       tasksRef.current = remote;
       setTasks(remote);
+      saveTasks(lsKey, remote);
     })();
     return () => { alive = false; };
   }, []); // eslint-disable-line
@@ -157,6 +170,57 @@ export default function App() {
     persist(tasks.map((x) => (x.id === id ? nt : x)));
     showToast('已记一笔');
   };
+
+  /* —— 本地文件登记（文件本体不上传，仅记录本机路径，列表随云端同步） ——
+     打开：zhumo-open:// 协议交由本机注册的处理程序（tools/local-file-opener）调默认程序 */
+  const addFile = (id, rawPath, stepIdx = -1) => {
+    const t = byId(id);
+    if (!t) return;
+    const path = String(rawPath || '').replace(/^["']+|["']+$/g, '').trim();
+    if (!path) return;
+    const f = { name: fileBase(path), path, ts: Date.now() };
+    if (stepIdx < 0) {
+      persist(tasks.map((x) => (x.id === id
+        ? { ...t, files: [...(t.files || []), f], log: [...t.log, { ts: Date.now(), text: '登记文件：' + f.name }] }
+        : x)));
+    } else {
+      const s = t.steps[stepIdx];
+      if (!s) return;
+      const steps = t.steps.map((x, i) => (i === stepIdx ? { ...x, files: [...(x.files || []), f] } : x));
+      persist(tasks.map((x) => (x.id === id
+        ? { ...t, steps, log: [...t.log, { ts: Date.now(), text: '步骤「' + s.t + '」登记文件：' + f.name }] }
+        : x)));
+    }
+    showToast('已登记（文件保留在本机，不上传）');
+  };
+  const delFile = (id, fIdx, stepIdx = -1) => {
+    const t = byId(id);
+    if (!t) return;
+    if (stepIdx < 0) {
+      const f = (t.files || [])[fIdx];
+      if (!f) return;
+      persist(tasks.map((x) => (x.id === id
+        ? { ...t, files: t.files.filter((_, i) => i !== fIdx), log: [...t.log, { ts: Date.now(), text: '移除文件：' + f.name }] }
+        : x)));
+    } else {
+      const s = t.steps[stepIdx];
+      const f = s && (s.files || [])[fIdx];
+      if (!f) return;
+      const steps = t.steps.map((x, i) => (i === stepIdx ? { ...x, files: x.files.filter((_, j) => j !== fIdx) } : x));
+      persist(tasks.map((x) => (x.id === id
+        ? { ...t, steps, log: [...t.log, { ts: Date.now(), text: '步骤「' + s.t + '」移除文件：' + f.name }] }
+        : x)));
+    }
+  };
+  const copyPath = (f) => {
+    const done = () => showToast('路径已复制');
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(f.path).then(done, () => showToast(f.path));
+    else showToast(f.path);
+  };
+  const openLocalFile = (f) => {
+    window.location.href = 'zhumo-open://' + encodeURIComponent(f.path);
+    showToast('已请求本机打开：' + f.name);
+  };
   const delTask = (id) => {
     const t = byId(id);
     if (!t) return;
@@ -173,7 +237,7 @@ export default function App() {
       const t = byId(modalId);
       if (!t) { closeModal(); return; }
       const keepDone = t.steps.length
-        ? fields.steps.map((s, i) => ({ t: s.t, done: (t.steps[i] || {}).done || false }))
+        ? fields.steps.map((s, i) => ({ t: s.t, done: (t.steps[i] || {}).done || false, files: (t.steps[i] || {}).files || [] }))
         : fields.steps;
       const nt = normalize({ ...t, ...fields, steps: keepDone, log: [...t.log] });
       if (nt.steps.length && nt.steps.every((s) => s.done) && nt.status !== 'done') nt.status = 'doing';
@@ -218,6 +282,14 @@ export default function App() {
     confirmDlg('恢复示例数据？', '当前 ' + tasks.length + ' 件事项将被示例数据覆盖。可先「导出备份」留底。', () => {
       persist(seedData());
       showToast('已恢复示例数据');
+    });
+  };
+
+  /* —— 退出登录（本地快照保留，再次登录后继续云端同步） —— */
+  const handleLogout = () => {
+    confirmDlg('退出登录？', '本地数据仍会保留在本机，再次登录后继续云端同步。', async () => {
+      try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* 网络不佳也照样回登录页 */ }
+      window.location.assign('/login');
     });
   };
 
@@ -325,6 +397,8 @@ export default function App() {
             onExport={doExport}
             onImportFile={doImport}
             onSeed={doSeed}
+            user={user}
+            onLogout={handleLogout}
           />
           <main className="views">
             <TodayView tasks={scoped} ui={ui} onTick={tick} onOpen={openDrawer} onNew={() => openModal(null)} />
@@ -342,6 +416,7 @@ export default function App() {
         onClose={closeDrawer} rootRef={drawerRootRef}
         onStatus={setStatus} onProg={setProg} onToggleStep={toggleStep}
         onAddStep={addStep} onDelStep={delStep} onNote={addNote}
+        onAddFile={addFile} onDelFile={delFile} onCopyPath={copyPath} onOpenFile={openLocalFile}
         onEdit={(id) => { closeDrawer(); openModal(id); }}
         onDel={delTask}
       />

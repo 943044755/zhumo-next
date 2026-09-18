@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import Icon from '../lib/icons.jsx';
 import { CATS, CAT_ICON, TAB_META } from '../lib/constants.js';
 
-export default function Topbar({ ui, cat, counts, onView, onCat, onQ, menuOpen, setMenuOpen, onNew, onExport, onImportFile, onSeed }) {
+export default function Topbar({ ui, cat, counts, onView, onCat, onQ, menuOpen, setMenuOpen, onNew, onExport, onImportFile, onSeed, user, onLogout }) {
   const fileRef = useRef(null);
 
   const onTabKey = (e) => {
@@ -53,6 +53,7 @@ export default function Topbar({ ui, cat, counts, onView, onCat, onQ, menuOpen, 
         <Icon name="gear" />
       </button>
       <div className="menu" hidden={!menuOpen}>
+        {user && <div className="menu-who">当前用户：{user}</div>}
         <button type="button" onClick={() => { setMenuOpen(false); onExport(); }}>
           <Icon name="download" />导出备份 JSON
         </button>
@@ -62,6 +63,11 @@ export default function Topbar({ ui, cat, counts, onView, onCat, onQ, menuOpen, 
         <button type="button" onClick={() => { setMenuOpen(false); onSeed(); }}>
           <Icon name="lamp" />恢复示例数据
         </button>
+        {user && (
+          <button type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
+            <Icon name="logout" />退出登录
+          </button>
+        )}
       </div>
 
       <button type="button" className="btn-new" onClick={onNew}>

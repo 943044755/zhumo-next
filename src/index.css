@@ -526,3 +526,39 @@ input,textarea,select{font:inherit;color:inherit}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+
+/* ============ 登录页（口令门） ============ */
+.login-wrap{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{width:min(380px,100%);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--sh-2);padding:34px 30px 26px;text-align:center}
+.login-seal{width:56px;height:56px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;background:var(--cinnabar);color:#fff;border-radius:8px;font-family:var(--kai);font-size:30px;transform:rotate(-3deg);box-shadow:var(--sh-1)}
+.login-title{font-size:22px;letter-spacing:.08em}
+.login-sub{margin:6px 0 22px;color:var(--ink-3);font-size:13px}
+.login-field{display:flex;flex-direction:column;gap:12px;text-align:left}
+.login-field input{padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--r-ctl);background:#fff;font-size:15px;width:100%}
+.login-btn{padding:10px 0;background:var(--cinnabar);color:#fff;border-radius:var(--r-ctl);font-size:15px;letter-spacing:.3em;text-indent:.3em;transition:background var(--t-fast)}
+.login-btn:hover{background:var(--cinnabar-deep)}
+.login-btn[disabled]{opacity:.6;cursor:default}
+.login-err{margin:2px 0 0;color:var(--cinnabar);font-size:13px;min-height:1.2em;text-align:center}
+.login-note{margin:4px 0 0;padding-top:14px;border-top:1px dashed var(--line);color:var(--ink-2);font-size:12.5px;line-height:1.8;text-align:left}
+.login-note code{background:var(--wash);padding:1px 5px;border-radius:4px;font-size:12px}
+.login-card.shake{animation:loginShake .3s}
+@keyframes loginShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.menu-who{padding:4px 14px 8px;color:var(--ink-3);font-size:12px;border-bottom:1px dashed var(--line);margin-bottom:4px}
+.login-switch{margin:2px 0 0;font-size:13px;color:var(--ink-2)}
+.login-switch button{color:var(--indigo);text-decoration:underline;text-underline-offset:3px;margin-left:4px}
+
+/* —— 本地文件登记（任务级 + 步骤级；文件本体不上传，仅记路径） —— */
+/* 步骤行改包了一层 .step-wrap，「最后一步无底线」的规则随之搬家 */
+.step-wrap:last-of-type .step{border-bottom:0}
+.step .f-btn{position:relative}
+.step .f-btn:has(.f-count){opacity:.55} /* 挂了文件的步骤，回形针常显可点 */
+.step:hover .f-btn{opacity:1}
+.f-count{position:absolute;top:-4px;right:-4px;min-width:14px;height:14px;padding:0 3px;background:var(--cinnabar);color:#fff;border-radius:99px;font-size:9.5px;line-height:14px;font-weight:600;text-align:center}
+.step-files{margin:2px 0 8px 30px;padding:8px 10px 10px;border-left:2px solid var(--line-strong);background:var(--wash);border-radius:0 8px 8px 0}
+.filelist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.file-i{display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--surface)}
+.file-i .iconbtn{width:26px;height:26px;flex:none;opacity:.6}
+.file-i .iconbtn:hover{opacity:1}
+.file-open{flex:1;min-width:0;text-align:left;font-size:13px;color:var(--indigo);text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(49,83,110,.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 0;transition:color var(--t-fast)}
+.file-open:hover{color:var(--cinnabar);text-decoration-color:rgba(181,56,42,.5)}
+.step-files .addline{margin-top:8px}

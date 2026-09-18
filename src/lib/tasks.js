@@ -5,12 +5,31 @@ import { offsetISO, parseD, daysLeft } from './date.js';
 let uid = 0;
 export const newId = () => 't' + Date.now().toString(36) + (uid++).toString(36);
 
+/* 本地文件登记（文件本体不上传，仅记录路径）：{ name 显示名, path 本机绝对路径, ts 登记时间 } */
+export const fileBase = (p) =>
+  String(p || '').replace(/^["']+|["']+$/g, '').trim().split(/[\\/]/).pop() || '未命名';
+
+function cleanFiles(a) {
+  if (!Array.isArray(a)) return [];
+  return a
+    .map((f) => (typeof f === 'string' ? { path: f } : f))
+    .filter((f) => f && typeof f.path === 'string' && f.path.trim())
+    .map((f) => ({
+      name: String(f.name || fileBase(f.path)).trim() || '未命名',
+      path: f.path.trim(),
+      ts: +f.ts > 0 ? +f.ts : Date.now(),
+    }));
+}
+
 export function normalize(t) {
   t.id = t.id || newId();
   t.cat = CATS[t.cat] ? t.cat : 'daily';
   t.priority = PRIO[t.priority] ? t.priority : 2;
   t.status = STATUS[t.status] ? t.status : 'todo';
-  t.steps = Array.isArray(t.steps) ? t.steps.filter((s) => s && s.t) : [];
+  t.files = cleanFiles(t.files);
+  t.steps = Array.isArray(t.steps)
+    ? t.steps.filter((s) => s && s.t).map((s) => ({ t: s.t, done: !!s.done, files: cleanFiles(s.files) }))
+    : [];
   t.log = Array.isArray(t.log) ? t.log : [];
   t.notes = t.notes || ''; t.est = +t.est > 0 ? +t.est : 1;
   t.start = t.start || t.due; t.doneAt = t.doneAt || null;
